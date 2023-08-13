@@ -2,13 +2,12 @@ package com.blu.flagsmith
 
 import android.content.Context
 import com.blu.flagsmith.entities.TraitWithIdentityModel
-import com.blu.injection.Injector.bluFlagsmith
+import com.blu.flagsmith.util.ErrorHandler
+import com.blu.flagsmith.util.ResultEntity
+import com.blu.flagsmith.util.DefaultErrorHandler
 import com.flagsmith.entities.FlagModel
-import com.flagsmith.entities.IdentityFlagsAndTraitsModel
 import com.flagsmith.entities.IdentityModel
 import com.flagsmith.entities.Trait
-import org.koin.android.ext.koin.androidContext
-import org.koin.core.context.GlobalContext.startKoin
 
 /**
  * Flagsmith
@@ -24,17 +23,19 @@ import org.koin.core.context.GlobalContext.startKoin
  */
 
 class BluFlagsmith constructor(
-    val environmentKey: String,
-    val baseUrl: String = "https://edge.api.flagsmith.com/api/v1",
-    val context: Context? = null,
-    val enableAnalytics: Boolean = ANALYTICS_IS_ENABLE,
-    val analyticsFlushPeriod: Int = DEFAULT_ANALYTICS_FLUSH_PERIOD_SECONDS,
-    val cacheConfig: FlagsmithCacheConfigModel = FlagsmithCacheConfigModel(),
-    val defaultFlags: List<FlagModel> = emptyList(),
-    val requestTimeoutSeconds: Long = 4L,
-    val readTimeoutSeconds: Long = 6L,
-    val writeTimeoutSeconds: Long = 6L
+    private val environmentKey: String,
+    private val baseUrl: String = "https://edge.api.flagsmith.com/api/v1",
+    private val context: Context? = null,
+    private val enableAnalytics: Boolean = ANALYTICS_IS_ENABLE,
+    private val analyticsFlushPeriod: Int = DEFAULT_ANALYTICS_FLUSH_PERIOD_SECONDS,
+    private val cacheConfig: FlagsmithCacheConfigModel = FlagsmithCacheConfigModel(),
+    private val defaultFlags: List<FlagModel> = emptyList(),
+    private val errorHandler: ErrorHandler= DefaultErrorHandler(),
+    private val requestTimeoutSeconds: Long = 4L,
+    private val readTimeoutSeconds: Long = 6L,
+    private val writeTimeoutSeconds: Long = 6L
 ) {
+
     private val retrofit: FlagsmithServices = FlagsmithRetrofitHelper.create(
         baseUrl,
         environmentKey,
@@ -45,22 +46,19 @@ class BluFlagsmith constructor(
         writeTimeoutSeconds
     )
 
+    private val services = FlagsmithRemoteDataSource(
+        retrofit, errorHandler = errorHandler
+    )
+
     private val analytics: BluFlagsmithAnalytics? =
         if (!enableAnalytics) null
-        else if (context != null) BluFlagsmithAnalytics(context, retrofit, analyticsFlushPeriod)
+        else if (context != null) BluFlagsmithAnalytics(context, services, analyticsFlushPeriod)
         else throw IllegalArgumentException("Flagsmith requires a context to use the analytics feature")
 
 
     init {
-        if (cacheConfig.enableCache && context == null) {
+        if (cacheConfig.enableCache && context == null)
             throw IllegalArgumentException("Flagsmith requires a context to use the cache feature")
-        }
-        if (context != null) {
-            startKoin {
-                androidContext(context)
-                modules(bluFlagsmith) // Define your Koin modules here
-            }
-        } else throw IllegalArgumentException("Flagsmith requires a context")
     }
 
     companion object {
@@ -68,15 +66,15 @@ class BluFlagsmith constructor(
         const val DEFAULT_ANALYTICS_FLUSH_PERIOD_SECONDS = 10
     }
 
-    suspend fun getFeatureFlags(identity: String? = null): IdentityFlagsAndTraitsModel =
+    suspend fun getFeatureFlags(identity: String? = null) =
         if (identity != null) {
-            retrofit.getIdentityFlagsAndTraits(identity)
+            services.getIdentityFlagsAndTraits(identity)
         } else {
             throw IllegalArgumentException("Call getFlags if you cant set Identity")
         }
 
-    suspend fun getFlags(): List<FlagModel> =
-        retrofit.getFlags()
+    suspend fun getFlags() =
+        services.getFlags()
 
 
     suspend fun hasFeatureFlag(
@@ -90,26 +88,32 @@ class BluFlagsmith constructor(
     ) = getFeatureFlag(featureId, identity)
 
     suspend fun getTrait(id: String, identity: String) =
-        retrofit.getIdentityFlagsAndTraits(identity)
+        services.getIdentityFlagsAndTraits(identity)
 
     suspend fun getTraits(identity: String) =
-        retrofit.getIdentityFlagsAndTraits(identity)
+        services.getIdentityFlagsAndTraits(identity)
 
     suspend fun setTrait(trait: Trait, identity: String) =
-        retrofit.postTraits(TraitWithIdentityModel(trait.key, trait.value, IdentityModel(identity)))
+        services.postTraits(TraitWithIdentityModel(trait.key, trait.value, IdentityModel(identity)))
 
     suspend fun getIdentity(identity: String) =
-        retrofit.getIdentityFlagsAndTraits(identity)
+        services.getIdentityFlagsAndTraits(identity)
 
-    // if getFlags response Failed you most get default flags
-    fun getDefaultFlags() = defaultFlags
 
     suspend fun getFeatureFlag(
         featureId: String,
         identity: String?
-    ): IdentityFlagsAndTraitsModel = getFeatureFlags(identity).apply {
-        flags.find { flag -> flag.feature.name == featureId && flag.enabled }
-        analytics?.trackEvent(featureId)
-    }
+    ) = getFeatureFlags(identity).apply {
+        when (this) {
+            is ResultEntity.Error -> {
+                ResultEntity.Success(defaultFlags)
+            }
 
+            ResultEntity.Loading -> Unit
+            is ResultEntity.Success -> {
+                this.data.flags.find { flag -> flag.feature.name == featureId && flag.enabled }
+                analytics?.trackEvent(featureId)
+            }
+        }
+    }
 }

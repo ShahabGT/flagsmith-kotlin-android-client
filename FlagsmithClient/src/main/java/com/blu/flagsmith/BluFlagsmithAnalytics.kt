@@ -3,6 +3,7 @@ package com.blu.flagsmith
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.blu.flagsmith.util.ResultEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -12,7 +13,7 @@ import org.json.JSONObject
 
 class BluFlagsmithAnalytics constructor(
     private val context: Context,
-    private val retrofitService: FlagsmithServices,
+    private val dataSource: FlagsmithRemoteDataSource,
     private val flushPeriod: Int
 ) {
     private val applicationContext: Context = context.applicationContext
@@ -20,7 +21,18 @@ class BluFlagsmithAnalytics constructor(
 
     private val job = CoroutineScope(Dispatchers.IO).launch {
         if (currentEvents.isNotEmpty())
-            retrofitService.postAnalytics(currentEvents)
+            dataSource.postAnalytics(currentEvents).apply {
+                when(this){
+                    is ResultEntity.Error -> {
+                        Log.e(
+                            "FLAGSMITH",
+                            "Failed posting analytics - ${this.error.message}"
+                        )
+                    }
+                    ResultEntity.Loading -> Unit
+                    is ResultEntity.Success -> resetMap()
+                }
+            }
 
         delay(flushPeriod.toLong() * 1000)
     }
