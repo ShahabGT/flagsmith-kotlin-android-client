@@ -101,6 +101,9 @@ class BluFlagsmith constructor(
     suspend fun getIdentity(identity: String) =
         retrofit.getIdentityFlagsAndTraits(identity)
 
+    // if getFlags response Failed you most get default flags
+    fun getDefaultFlags() = defaultFlags
+
     suspend fun getFeatureFlag(
         featureId: String,
         identity: String?
