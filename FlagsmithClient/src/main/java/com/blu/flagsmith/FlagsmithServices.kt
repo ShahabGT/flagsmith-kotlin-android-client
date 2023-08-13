@@ -9,14 +9,14 @@ import retrofit2.http.Query
 
 interface FlagsmithServices {
     @GET("identities/")
-    fun getIdentityFlagsAndTraits(@Query("identity") identity: String): IdentityFlagsAndTraitsModel
+    suspend fun getIdentityFlagsAndTraits(@Query("identity") identity: String): IdentityFlagsAndTraitsModel
 
     @GET("flags/")
-    fun getFlags(): List<FlagModel>
+    suspend fun getFlags(): List<FlagModel>
 
     @POST("traits/")
-    fun postTraits(@Body trait: TraitWithIdentityModel): TraitWithIdentityModel
+    suspend fun postTraits(@Body trait: TraitWithIdentityModel): TraitWithIdentityModel
 
     @POST("analytics/flags/")
-    fun postAnalytics(@Body eventMap: Map<String, Int?>): Any
+    suspend fun postAnalytics(@Body eventMap: Map<String, Int?>): Any
 }
