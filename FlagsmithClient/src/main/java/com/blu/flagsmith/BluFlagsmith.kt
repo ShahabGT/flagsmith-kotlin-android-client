@@ -9,7 +9,6 @@ import com.flagsmith.entities.IdentityModel
 import com.flagsmith.entities.Trait
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext.startKoin
-import org.koin.java.KoinJavaComponent.inject
 
 /**
  * Flagsmith
@@ -36,7 +35,15 @@ class BluFlagsmith constructor(
     val readTimeoutSeconds: Long = 6L,
     val writeTimeoutSeconds: Long = 6L
 ) {
-    private val retrofit: FlagsmithServices by inject(this::class.java)
+    private val retrofit: FlagsmithServices = FlagsmithRetrofitHelper.create(
+        baseUrl,
+        environmentKey,
+        context,
+        cacheConfig,
+        requestTimeoutSeconds,
+        readTimeoutSeconds,
+        writeTimeoutSeconds
+    )
 
     private val analytics: BluFlagsmithAnalytics? =
         if (!enableAnalytics) null
@@ -61,40 +68,40 @@ class BluFlagsmith constructor(
         const val DEFAULT_ANALYTICS_FLUSH_PERIOD_SECONDS = 10
     }
 
-    fun getFeatureFlags(identity: String? = null): IdentityFlagsAndTraitsModel =
+    suspend fun getFeatureFlags(identity: String? = null): IdentityFlagsAndTraitsModel =
         if (identity != null) {
             retrofit.getIdentityFlagsAndTraits(identity)
         } else {
             throw IllegalArgumentException("Call getFlags if you cant set Identity")
         }
 
-    fun getFlags(): List<FlagModel> =
+    suspend fun getFlags(): List<FlagModel> =
         retrofit.getFlags()
 
 
-    fun hasFeatureFlag(
+    suspend fun hasFeatureFlag(
         featureId: String,
         identity: String? = null
     ) = getFeatureFlag(featureId, identity)
 
-    fun getValueForFeature(
+    suspend fun getValueForFeature(
         featureId: String,
         identity: String? = null
     ) = getFeatureFlag(featureId, identity)
 
-    fun getTrait(id: String, identity: String) =
+    suspend fun getTrait(id: String, identity: String) =
         retrofit.getIdentityFlagsAndTraits(identity)
 
-    fun getTraits(identity: String) =
+    suspend fun getTraits(identity: String) =
         retrofit.getIdentityFlagsAndTraits(identity)
 
-    fun setTrait(trait: Trait, identity: String) =
+    suspend fun setTrait(trait: Trait, identity: String) =
         retrofit.postTraits(TraitWithIdentityModel(trait.key, trait.value, IdentityModel(identity)))
 
-    fun getIdentity(identity: String) =
+    suspend fun getIdentity(identity: String) =
         retrofit.getIdentityFlagsAndTraits(identity)
 
-    private fun getFeatureFlag(
+    suspend fun getFeatureFlag(
         featureId: String,
         identity: String?
     ): IdentityFlagsAndTraitsModel = getFeatureFlags(identity).apply {
