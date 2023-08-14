@@ -73,11 +73,8 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
-    val koinVersion= "3.4.3"
-    implementation ("io.insert-koin:koin-android:$koinVersion")
-    implementation ("io.insert-koin:koin-android-compat:$koinVersion")
-    implementation ("io.insert-koin:koin-androidx-workmanager:$koinVersion")
-    implementation ("io.insert-koin:koin-androidx-navigation:$koinVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.2")
+
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
